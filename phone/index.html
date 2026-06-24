@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>3S Verse POS — Mobile</title>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+:root{--bg:#0f172a;--panel:#1e293b;--panel2:#273449;--line:#334155;--txt:#e2e8f0;--muted:#94a3b8;--accent:#22c55e;--red:#ef4444}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--txt);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+input,select,button{font-family:inherit;font-size:16px}
+input,select{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:13px;border-radius:10px}
+.hdr{background:var(--panel);padding:12px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
+.hdr b{font-size:16px;flex:1}
+.dot{font-size:11px;color:var(--muted)}.dot.ok{color:var(--accent)}
+.tabs{display:flex;background:var(--panel);border-bottom:1px solid var(--line)}
+.tabs button{flex:1;padding:14px;background:transparent;border:none;color:var(--muted);font-weight:700;font-size:15px}
+.tabs button.on{color:#fff;border-bottom:3px solid var(--accent)}
+.wrap{flex:1;overflow:auto;padding:14px}
+.btn{width:100%;padding:16px;border:none;border-radius:12px;font-size:17px;font-weight:700;background:var(--accent);color:#fff;margin-bottom:10px}
+.btn.gray{background:var(--panel2);color:var(--txt)}.btn.red{background:var(--red)}
+.scanbtn{padding:22px;font-size:18px;background:var(--accent);color:#fff;border:none;border-radius:16px;width:100%;font-weight:800;margin-bottom:12px}
+.row{display:flex;gap:8px;align-items:center}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:8px}
+.citem{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px}
+.citem .nm{flex:1;font-size:14px}.citem .nm small{display:block;color:var(--muted);font-size:12px}
+.qbtn{width:34px;height:34px;border-radius:8px;background:var(--panel2);color:#fff;border:none;font-size:18px}
+.total{position:sticky;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:12px 14px}
+.muted{color:var(--muted);font-size:13px}
+.center{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:24px;text-align:center}
+.logo{width:64px;height:64px;border-radius:16px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:24px;margin-bottom:14px}
+.field{margin-bottom:12px;text-align:left}.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600}
+#cam{width:100%;border-radius:14px;background:#000;max-height:55vh}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;z-index:50}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--accent);padding:11px 18px;border-radius:24px;font-size:14px;opacity:0;transition:.25s;z-index:99}
+.toast.show{opacity:1}
+.empty{text-align:center;color:var(--muted);padding:30px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+<script>
+const LS={g(k,d){try{const v=localStorage.getItem('vph_'+k);return v?JSON.parse(v):d}catch(e){return d}},s(k,v){localStorage.setItem('vph_'+k,JSON.stringify(v))}};
+let fbConfig=LS.g('fbConfig',null), storeId=LS.g('storeId','main');
+let DATA={settings:{storeName:'My Store',currency:'Rs',taxInclusive:false,invoicePrefix:'INV',invoiceCounter:1000},products:[],customers:[],users:[],sales:[],held:[],lost:[],requests:[],taxes:[]};
+let me=null, mode='sell', cart=[], db=null, fbApp=null, lastExported=0, applying=false, pushT=null;
+const $=id=>document.getElementById(id);
+function toast(m){const t=$('toast');t.textContent=m;t.className='toast show';setTimeout(()=>t.className='toast',2000)}
+function money(n){return (DATA.settings.currency||'Rs')+' '+Number(n||0).toLocaleString('en-PK')}
+function taxRate(id){const t=(DATA.taxes||[]).find(x=>x.id===id);return t?t.rate:0}
+function findByCode(code){code=(code||'').trim();if(!code)return null;return DATA.products.find(p=>p.barcode===code)||DATA.products.find(p=>(p.sku||'').toLowerCase()===code.toLowerCase())||null}
+
+/* ---------- Firebase ---------- */
+function initFb(){if(!fbConfig){render();return}try{if(!fbApp)fbApp=firebase.initializeApp(fbConfig);db=firebase.firestore();subscribe();}catch(e){toast('Firebase config error');}}
+function subscribe(){const ref=db.collection('stores').doc(storeId||'main');ref.onSnapshot(snap=>{if(!snap.exists)return;if(snap.metadata.hasPendingWrites)return;const d=snap.data();if(!d||!d.payload)return;let pd;try{pd=JSON.parse(d.payload)}catch(e){return}const t=Date.parse(pd.exported||'')||0;if(t<=lastExported)return;lastExported=t;applying=true;mergeData(pd);applying=false;render();},err=>{toast('Cloud error')});}
+function mergeData(pd){['settings','products','customers','users','sales','held','lost','requests','taxes'].forEach(k=>{if(pd[k]!=null)DATA[k]=pd[k]});}
+function payload(){return {...DATA,exported:new Date().toISOString(),app:'3SVersePOS'}}
+function pushCloud(){if(!db||applying)return;const p=payload();lastExported=Date.parse(p.exported);db.collection('stores').doc(storeId||'main').set({payload:JSON.stringify(p),exported:p.exported,updatedBy:(me&&me.name)||'phone',ts:Date.now()}).catch(()=>{});}
+function schedulePush(){if(!db||applying)return;clearTimeout(pushT);pushT=setTimeout(pushCloud,500)}
+
+/* ---------- Camera scan ---------- */
+let zx=null,scanCb=null,lastScan='',lastScanT=0;
+function openScan(cb){scanCb=cb;const m=document.createElement('div');m.className='modal';m.id='scanModal';m.innerHTML=`<video id="cam" muted playsinline></video><p class="muted" style="margin:12px 0">Point at the barcode…</p><input id="manual" placeholder="…or type barcode + Enter" style="max-width:340px"><button class="btn gray" style="max-width:340px;margin-top:10px" onclick="closeScan()">Close</button>`;document.body.appendChild(m);$('manual').addEventListener('keydown',e=>{if(e.key==='Enter'){const v=e.target.value.trim();if(v){const cb=scanCb;closeScan();cb&&cb(v)}}});setTimeout(startCam,150);}
+function startCam(){if(typeof ZXing==='undefined')return;try{if(!zx)zx=new ZXing.BrowserMultiFormatReader();zx.decodeFromVideoDevice(null,'cam',(res)=>{if(res){const code=res.getText();const now=Date.now();if(code===lastScan&&now-lastScanT<1200)return;lastScan=code;lastScanT=now;const cb=scanCb;closeScan();cb&&cb(code);}});}catch(e){}}
+function closeScan(){try{if(zx)zx.reset()}catch(e){}const m=$('scanModal');if(m)m.remove();}
+
+/* ---------- Auth ---------- */
+function login(){const em=($('email').value||'').trim().toLowerCase();const pw=$('pass').value||'';const s=DATA.settings;if(s.adminEmail&&em===(s.adminEmail||'').toLowerCase()&&pw===(s.adminPassword||'')){me={name:s.adminName||'Owner',admin:true,perms:{}};render();return}const u=(DATA.users||[]).find(x=>x.active!==false&&(x.email||'').toLowerCase()===em);if(u&&(u.password||'')===pw){me={name:u.name||u.email,admin:false,perms:u.perms||{}};render();return}toast('Wrong email or password')}
+function can(p){return me&&(me.admin||(me.perms&&me.perms[p]))}
+function logout(){me=null;cart=[];render()}
+
+/* ---------- Sell ---------- */
+function addToCart(p){const used=cart.filter(c=>c.id===p.id).reduce((a,c)=>a+c.qty,0);if((p.stock||0)-used<=0){toast('Out of stock: '+p.name);return}const ex=cart.find(c=>c.id===p.id);if(ex)ex.qty++;else cart.push({id:p.id,name:p.name,price:p.price,taxId:p.taxId,qty:1});toast('🛒 '+p.name);render();}
+function cartChange(id,d){const c=cart.find(x=>x.id===id);if(!c)return;c.qty+=d;if(c.qty<=0)cart=cart.filter(x=>x.id!==id);render();}
+function cartTotals(){let sub=0,tax=0;cart.forEach(c=>{const line=c.price*c.qty;sub+=line;const r=taxRate(c.taxId);tax+=DATA.settings.taxInclusive?(line-line/(1+r/100)):line*r/100;});const grand=DATA.settings.taxInclusive?sub:sub+tax;return{sub,tax,grand}}
+function checkout(){if(!cart.length)return;const t=cartTotals();const s=DATA.settings;s.invoiceCounter=(s.invoiceCounter||1000)+1;const inv=(s.invoicePrefix||'INV')+'-'+s.invoiceCounter;const walk=(DATA.customers.find(c=>c.walkin)||DATA.customers[0]||{}).id;const taxMap={};cart.forEach(c=>{const r=taxRate(c.taxId);const line=c.price*c.qty;const tx=s.taxInclusive?(line-line/(1+r/100)):line*r/100;const nm=(DATA.taxes.find(x=>x.id===c.taxId)||{}).name||'Tax';taxMap[nm]=(taxMap[nm]||0)+tx;});const sale={id:'s'+Date.now().toString(36),invoice:inv,time:Date.now(),items:cart.map(c=>({id:c.id,name:c.name,price:c.price,qty:c.qty,pcs:1,taxId:c.taxId})),customer:walk,method:'Cash',tendered:t.grand,discount:{type:'amount',value:0},sub:t.sub,discAmt:0,taxMap,taxTotal:t.tax,grand:t.grand,change:0,status:'completed',cashier:(me&&me.name)||'Phone'};cart.forEach(c=>{const p=DATA.products.find(x=>x.id===c.id);if(p)p.stock=Math.max(0,(p.stock||0)-c.qty)});DATA.sales.unshift(sale);pushCloud();cart=[];toast('✓ Sold — '+inv);render();}
+
+/* ---------- Stock-in ---------- */
+function stockIn(code,qty){const p=findByCode(code);if(!p){toast('Unknown: '+code);return}qty=qty||1;p.stock=(p.stock||0)+qty;pushCloud();toast('📥 '+p.name+' +'+qty+' → '+p.stock);render();}
+
+/* ---------- Render ---------- */
+function render(){const a=$('app');
+  if(!fbConfig){a.innerHTML=`<div class="center"><div class="logo">3S</div><h2 style="margin-bottom:6px">Connect to your shop</h2><p class="muted" style="margin-bottom:16px">Paste the same Firebase config & Store ID used on the POS (Setup → Cloud Sync).</p><div class="field" style="width:100%"><label>Firebase config</label><textarea id="cfg" rows="6" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:12px;border-radius:10px" placeholder='{ "apiKey":"…","projectId":"…","appId":"…" }'></textarea></div><div class="field" style="width:100%"><label>Store ID</label><input id="sid" value="main"></div><button class="btn" onclick="saveCfg()">Connect</button></div>`;return}
+  if(!me){a.innerHTML=`<div class="center"><div class="logo">3S</div><h2 style="margin-bottom:4px">${DATA.settings.storeName||'3S Verse POS'}</h2><p class="muted" style="margin-bottom:16px">Sign in</p><div class="field" style="width:100%"><label>Email</label><input id="email" placeholder="you@store.com"></div><div class="field" style="width:100%"><label>Password</label><input id="pass" type="password"></div><button class="btn" onclick="login()">Sign in</button><button class="btn gray" onclick="resetCfg()">Change shop</button></div>`;return}
+  let body='';
+  if(mode==='sell'){
+    const t=cartTotals();
+    body=`<div class="wrap"><button class="scanbtn" onclick="openScan(c=>{const p=findByCode(c);p?addToCart(p):toast('Unknown: '+c)})">📷 Scan to sell</button><input placeholder="🔍 Search item…" oninput="searchList(this.value)" id="q"><div id="list" style="margin-top:10px"></div>${cart.length?`<h3 style="margin:14px 0 8px">Cart</h3>`+cart.map(c=>`<div class="citem"><div class="nm">${c.name}<small>${money(c.price)} each</small></div><button class="qbtn" onclick="cartChange('${c.id}',-1)">−</button><b style="min-width:22px;text-align:center">${c.qty}</b><button class="qbtn" onclick="cartChange('${c.id}',1)">+</button></div>`).join(''):''}</div>${cart.length?`<div class="total"><div class="row" style="justify-content:space-between;margin-bottom:8px"><span class="muted">Total (${cart.reduce((a,c)=>a+c.qty,0)} items)</span><b style="font-size:20px">${money(t.grand)}</b></div><button class="btn" onclick="checkout()">💵 Charge (Cash)</button></div>`:''}`;
+  } else {
+    const recent=(DATA.sales,[]);
+    body=`<div class="wrap"><button class="scanbtn" onclick="openScan(c=>stockIn(c, parseInt(($('siq')||{}).value)||1))">📷 Scan to receive stock</button><div class="row" style="margin-bottom:12px"><div style="flex:1"><label class="muted">Qty per scan</label><input id="siq" type="number" value="1"></div></div><input placeholder="🔍 Find item to stock-in…" oninput="searchStock(this.value)" id="qs"><div id="slist" style="margin-top:10px"></div></div>`;
+  }
+  a.innerHTML=`<div class="hdr"><div class="logo" style="width:32px;height:32px;font-size:13px;border-radius:9px">3S</div><b>${DATA.settings.storeName||'3S Verse'}</b><span class="dot ok" id="cdot">●live</span><button class="qbtn" onclick="logout()" title="Logout">⎋</button></div><div class="tabs"><button class="${mode==='sell'?'on':''}" onclick="setMode('sell')">🛒 Sell</button>${can('products')?`<button class="${mode==='stockin'?'on':''}" onclick="setMode('stockin')">📥 Stock-In</button>`:''}</div>${body}`;
+}
+function setMode(m){if(m==='stockin'&&!can('products')){toast('No permission');return}mode=m;render()}
+function searchList(q){q=(q||'').toLowerCase();const l=$('list');if(!l)return;const list=DATA.products.filter(p=>[p.name,p.sku,p.barcode].join(' ').toLowerCase().includes(q)).slice(0,30);l.innerHTML=list.map(p=>`<div class="card row" onclick="addToCart(DATA.products.find(x=>x.id==='${p.id}'))" style="justify-content:space-between"><div><b>${p.name}</b><br><span class="muted">${money(p.price)} · stock ${p.stock}</span></div><span style="color:var(--accent);font-weight:800">+</span></div>`).join('')||'<div class="empty">No items</div>';}
+function searchStock(q){q=(q||'').toLowerCase();const l=$('slist');if(!l)return;const list=DATA.products.filter(p=>[p.name,p.sku,p.barcode].join(' ').toLowerCase().includes(q)).slice(0,30);l.innerHTML=list.map(p=>`<div class="card row" onclick="stockIn('${p.barcode||p.sku}', parseInt(($('siq')||{}).value)||1)" style="justify-content:space-between"><div><b>${p.name}</b><br><span class="muted">stock ${p.stock}</span></div><span style="color:var(--accent);font-weight:800">+${(($('siq')||{}).value)||1}</span></div>`).join('')||'<div class="empty">No items</div>';}
+function saveCfg(){let cfg;try{cfg=JSON.parse($('cfg').value)}catch(e){try{const m=$('cfg').value.match(/\{[\s\S]*\}/);cfg=m?(new Function('return '+m[0]))():null}catch(x){}}if(!cfg||!cfg.apiKey){toast('Paste a valid Firebase config');return}fbConfig=cfg;storeId=($('sid').value||'main').trim();LS.s('fbConfig',fbConfig);LS.s('storeId',storeId);initFb();toast('Connecting…');setTimeout(render,600);}
+function resetCfg(){if(!confirm('Disconnect from this shop?'))return;localStorage.removeItem('vph_fbConfig');fbConfig=null;me=null;render();}
+window.DATA=DATA;
+initFb();render();
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{})}
+</script>
+</body>
+</html>
