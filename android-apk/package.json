@@ -1,0 +1,13 @@
+{
+  "name": "threesverse-pos-android",
+  "version": "1.0.0",
+  "private": true,
+  "description": "3S Verse POS - Android wrapper (Capacitor)",
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/android": "^6.1.2"
+  }
+}

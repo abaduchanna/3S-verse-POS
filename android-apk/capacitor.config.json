@@ -1,0 +1,8 @@
+{
+  "appId": "com.threesverse.pos",
+  "appName": "3S Verse POS",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}
