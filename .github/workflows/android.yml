@@ -15,26 +15,22 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: android-actions/setup-android@v3
-      - name: Install Capacitor
-        working-directory: android-apk
-        run: npm install
-      - name: Add Android platform
-        working-directory: android-apk
-        run: npx --yes cap add android
-      - name: Add camera permission
-        working-directory: android-apk
+      - name: Assemble Capacitor app from phone/ and build APK
         run: |
+          set -e
+          mkdir -p capapp/www
+          cp -r phone/* capapp/www/
+          cd capapp
+          echo '{"name":"threesverse-pos","version":"1.0.0","devDependencies":{"@capacitor/cli":"^6.1.2"},"dependencies":{"@capacitor/core":"^6.1.2","@capacitor/android":"^6.1.2"}}' > package.json
+          echo '{"appId":"com.threesverse.pos","appName":"3S Verse POS","webDir":"www","server":{"androidScheme":"https"}}' > capacitor.config.json
+          npm install
+          npx --yes cap add android
           M=android/app/src/main/AndroidManifest.xml
-          grep -q "android.permission.CAMERA" "$M" || sed -i 's#<application#<uses-permission android:name="android.permission.CAMERA" />\n    <application#' "$M"
-      - name: Build APK
-        working-directory: android-apk/android
-        run: |
+          grep -q "android.permission.CAMERA" "$M" || sed -i 's#<application#<uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <application#' "$M"
+          cd android
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon
-      - name: Collect APK
-        working-directory: android-apk/android
-        run: cp app/build/outputs/apk/debug/app-debug.apk 3SVerse-POS.apk
       - uses: actions/upload-artifact@v4
         with:
           name: 3SVerse-POS-Android-APK
-          path: android-apk/android/3SVerse-POS.apk
+          path: capapp/android/app/build/outputs/apk/debug/app-debug.apk
