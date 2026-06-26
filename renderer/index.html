@@ -356,29 +356,25 @@ function bord(){const s={style:'thin',color:{argb:'FFD0D5DD'}};return {top:s,lef
 async function buildWorkbook(sheets,filename){
   if(typeof ExcelJS==='undefined'){toast('Excel needs internet the first time it loads',true);return}
   const wb=new ExcelJS.Workbook();wb.creator='3S Verse POS';
-  let logoId=null;
-  if(S.logo){try{const ext=/png/i.test(S.logo.slice(0,20))?'png':'jpeg';const b64=S.logo.split(',')[1]||S.logo;logoId=wb.addImage({base64:b64,extension:ext});}catch(e){}}
+  let logoB64=null,logoExt='png';
+  if(S.logo){try{logoExt=/png/i.test(S.logo.slice(0,20))?'png':'jpeg';logoB64=S.logo.split(',')[1]||S.logo;}catch(e){}}
   sheets.forEach(sh=>{
     const ws=wb.addWorksheet(sh.name,{views:[{state:'frozen',ySplit:6}]});const nc=sh.columns.length;
-    ws.getColumn(1).width=20;
-    for(let i=2;i<=nc;i++)ws.getColumn(i).width=15;
-    // logo box in A1:A4
-    if(logoId!==null){try{ws.addImage(logoId,{tl:{col:0.15,row:0.1},ext:{width:120,height:84}});}catch(e){}}
-    const tStart=nc>1?2:1, tEnd=Math.max(tStart,nc);
-    ws.mergeCells(1,tStart,1,tEnd);ws.mergeCells(2,tStart,2,tEnd);ws.mergeCells(3,tStart,3,tEnd);ws.mergeCells(4,tStart,4,tEnd);
-    const c1=ws.getCell(1,tStart);c1.value=S.storeName;c1.font={bold:true,size:16,color:{argb:argb(accentHex())}};c1.alignment={horizontal:'center',vertical:'middle'};
-    const c2=ws.getCell(2,tStart);c2.value=sh.title;c2.font={bold:true,size:12};c2.alignment={horizontal:'center',vertical:'middle'};
-    const c3=ws.getCell(3,tStart);c3.value=S.address+'  ·  Tel: '+S.phone+(S.ntn?'  ·  NTN: '+S.ntn:'');c3.font={size:10,color:{argb:'FF555555'}};c3.alignment={horizontal:'center',vertical:'middle'};
-    const c4=ws.getCell(4,tStart);c4.value='Generated: '+new Date().toLocaleString();c4.font={size:9,italic:true,color:{argb:'FF888888'}};c4.alignment={horizontal:'center',vertical:'middle'};
-    ws.getRow(1).height=24;ws.getRow(2).height=18;ws.getRow(3).height=15;ws.getRow(4).height=14;ws.getRow(5).height=6;
+    for(let i=1;i<=nc;i++)ws.getColumn(i).width=15;
+    ws.mergeCells(1,1,1,nc);ws.mergeCells(2,1,2,nc);ws.mergeCells(3,1,3,nc);ws.mergeCells(4,1,4,nc);
+    const c1=ws.getCell(1,1);c1.value=S.storeName;c1.font={name:'Calibri',bold:true,size:18,color:{argb:argb(accentHex())}};c1.alignment={horizontal:'center',vertical:'middle'};
+    const c2=ws.getCell(2,1);c2.value=sh.title;c2.font={name:'Calibri',bold:true,size:13};c2.alignment={horizontal:'center',vertical:'middle'};
+    const c3=ws.getCell(3,1);c3.value=S.address+'   ·   Tel: '+S.phone+(S.ntn?'   ·   NTN: '+S.ntn:'');c3.font={name:'Calibri',size:10,color:{argb:'FF555555'}};c3.alignment={horizontal:'center',vertical:'middle'};
+    const c4=ws.getCell(4,1);c4.value='Generated: '+new Date().toLocaleString();c4.font={name:'Calibri',size:9,italic:true,color:{argb:'FF888888'}};c4.alignment={horizontal:'center',vertical:'middle'};
+    for(let rr=1;rr<=4;rr++){const row=ws.getRow(rr);for(let cc=1;cc<=nc;cc++){const cell=row.getCell(cc);cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFFFF'}};}}
+    ws.getRow(1).height=28;ws.getRow(2).height=20;ws.getRow(3).height=16;ws.getRow(4).height=14;ws.getRow(5).height=6;
+    if(logoB64){try{const id=wb.addImage({base64:logoB64,extension:logoExt});ws.addImage(id,{tl:{col:0.12,row:0.18},ext:{width:96,height:74},editAs:'oneCell'});}catch(e){}}
     let r=6;const hr=ws.getRow(r);
-    sh.columns.forEach((c,i)=>{const cell=hr.getCell(i+1);cell.value=c;cell.font={bold:true,color:{argb:'FFFFFFFF'},size:11};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:argb(accentHex())}};cell.alignment={horizontal:'center',vertical:'middle'};cell.border=bord();});
-    hr.height=22;
-    ws.autoFilter={from:{row:6,column:1},to:{row:6,column:nc}};
-    r++;
-    sh.rows.forEach((row,ri)=>{const rr=ws.getRow(r++);row.forEach((val,i)=>{const cell=rr.getCell(i+1);cell.value=val;cell.border=bord();if(ri%2===1)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF6F8FA'}};if(typeof val==='number'){cell.alignment={horizontal:'right'};cell.numFmt='#,##0';}});});
-    if(sh.total){const tr=ws.getRow(r++);sh.total.forEach((val,i)=>{const cell=tr.getCell(i+1);cell.value=val;cell.font={bold:true};cell.border=bord();cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE8EBEF'}};if(typeof val==='number'){cell.alignment={horizontal:'right'};cell.numFmt='#,##0';}});}
-    sh.columns.forEach((c,i)=>{if(i===0){ws.getColumn(1).width=Math.max(20,String(c).length+2);return}let w=Math.max(String(c).length+2,12);sh.rows.forEach(row=>{const s=String(row[i]==null?'':row[i]);if(s.length+2>w)w=s.length+2});ws.getColumn(i+1).width=Math.min(w,40)});
+    sh.columns.forEach((c,i)=>{const cell=hr.getCell(i+1);cell.value=c;cell.font={name:'Calibri',bold:true,color:{argb:'FFFFFFFF'},size:11};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:argb(accentHex())}};cell.alignment={horizontal:'center',vertical:'middle'};cell.border=bord();});
+    hr.height=22;ws.autoFilter={from:{row:6,column:1},to:{row:6,column:nc}};r++;
+    sh.rows.forEach((row,ri)=>{const rrow=ws.getRow(r++);row.forEach((val,i)=>{const cell=rrow.getCell(i+1);cell.value=val;cell.border=bord();cell.font={name:'Calibri',size:11};if(ri%2===1)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF4F7FA'}};if(typeof val==='number'){cell.alignment={horizontal:'right'};cell.numFmt='#,##0';}});});
+    if(sh.total){const trow=ws.getRow(r++);sh.total.forEach((val,i)=>{const cell=trow.getCell(i+1);cell.value=val;cell.font={name:'Calibri',bold:true};cell.border=bord();cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE8EBEF'}};if(typeof val==='number'){cell.alignment={horizontal:'right'};cell.numFmt='#,##0';}});}
+    sh.columns.forEach((c,i)=>{let w=Math.max(String(c).length+2,12);sh.rows.forEach(row=>{const s=String(row[i]==null?'':row[i]);if(s.length+2>w)w=s.length+2});ws.getColumn(i+1).width=Math.min(Math.max(w,12),42)});
   });
   try{const buf=await wb.xlsx.writeBuffer();const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();toast('Excel exported');}catch(e){toast('Export failed',true)}
 }
