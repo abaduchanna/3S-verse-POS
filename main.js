@@ -22,7 +22,8 @@ function readBackupFrom(folder) { try { const p = path.join(folder, BACKUP_NAME)
 function createWindow() {
   const win = new BrowserWindow({
     width: 1400, height: 900, minWidth: 1040, minHeight: 680,
-    backgroundColor: '#0f172a', title: '3S Verse POS System', autoHideMenuBar: true,
+    backgroundColor: '#141118', title: '3S Verse POS System', autoHideMenuBar: true,
+    icon: path.join(__dirname, 'renderer', 'assets', 'icon.ico'),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
   });
   win.webContents.setWindowOpenHandler(({ url }) => {
