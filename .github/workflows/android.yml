@@ -25,6 +25,13 @@ jobs:
           echo '{"appId":"com.threesverse.pos","appName":"3S Verse POS","webDir":"www","server":{"androidScheme":"https"}}' > capacitor.config.json
           npm install
           npx --yes cap add android
+          mkdir -p assets
+          cp www/assets/icon-only.png assets/icon-only.png || true
+          cp www/assets/icon-foreground.png assets/icon-foreground.png || true
+          cp www/assets/icon-background.png assets/icon-background.png || true
+          cp www/assets/splash.png assets/splash.png || true
+          cp www/assets/splash-dark.png assets/splash-dark.png || true
+          npx --yes @capacitor/assets generate --android --iconBackgroundColor '#141118' --iconBackgroundColorDark '#141118' --splashBackgroundColor '#141118' --splashBackgroundColorDark '#141118' || true
           M=android/app/src/main/AndroidManifest.xml
           grep -q "android.permission.CAMERA" "$M" || sed -i 's#<application#<uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <application#' "$M"
           cd android
