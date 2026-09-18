@@ -31,3 +31,7 @@ Every till points at the **same Google account's Drive**. The app keeps **one sh
 
 ## Data
 Stored locally on each PC and mirrored to the shared Drive file. **Setup → Local Backup** also exports a manual JSON. All data — products, sales, customers, **users**, lost sales, settings, logo, theme — lives in that one file.
+
+---
+
+Developed by **www.3SVerse.com** — software, systems & operations.

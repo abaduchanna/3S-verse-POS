@@ -1,6 +1,6 @@
 """
 Unified Theme Manager with One-Click Toggle
-Developed by Abad Umair Channa
+Developed by www.3SVerse.com
 """
 
 import tkinter as tk
@@ -104,7 +104,7 @@ class ThemeManager:
     def get_copyright_text() -> str:
         """Get formatted copyright text with dynamic year."""
         year = ThemeManager.get_copyright_year()
-        return f"© {year} Developed by Abad Umair Channa"
+        return f"© {year} Developed by www.3SVerse.com"
 
 
 def apply_theme_to_window(root: tk.Tk, theme_manager: ThemeManager):
